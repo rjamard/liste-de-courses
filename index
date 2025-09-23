@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Liste de courses — App simple</title>
+  <style>
+    :root{
+      --bg:#f7f8fb; --card:#ffffff; --accent:#006EED; --muted:#6b7280; --radius:10px;
+      --gap:12px; --pad:14px;
+    }
+    *{box-sizing:border-box}
+    body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; margin:0; background:var(--bg); color:#111}
+    header{background:linear-gradient(90deg,var(--accent),#00a3ff); color:white; padding:18px; display:flex; gap:12px; align-items:center}
+    header h1{font-size:1.05rem; margin:0}
+    .container{max-width:1100px; margin:18px auto; padding:12px}
+    .top{display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap}
+    .search{flex:1; position:relative}
+    .search input{width:100%; padding:12px 14px; border-radius:10px; border:1px solid #e5e7eb}
+    .suggestions{position:absolute; left:0; right:0; background:var(--card); border:1px solid #e5e7eb; margin-top:6px; border-radius:8px; max-height:220px; overflow:auto; z-index:20}
+    .suggestions button{display:block; width:100%; text-align:left; padding:10px 12px; border:none; background:transparent}
+    .controls{display:flex; gap:8px}
+    .btn{background:var(--accent); color:white; padding:10px 12px; border-radius:10px; border:none; cursor:pointer}
+    .btn.secondary{background:transparent; color:var(--accent); border:1px solid var(--accent)}
+
+    .grid{display:grid; grid-template-columns: 1fr 360px; gap:16px}
+    @media (max-width:900px){.grid{grid-template-columns:1fr} .right{order:2}}
+
+    .card{background:var(--card); border-radius:var(--radius); padding:var(--pad); box-shadow:0 6px 20px rgba(11,15,30,0.04)}
+    .category{margin-bottom:10px}
+    .cat-head{display:flex; justify-content:space-between; align-items:center; gap:10px}
+    .cat-head h2{font-size:0.95rem; margin:0}
+    .items{display:flex; flex-direction:column; gap:6px; margin-top:10px}
+    .item{display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:8px; border:1px solid #eef2ff; background:#fbfdff; width:100%}
+    .item input[type=checkbox]{width:18px;height:18px}
+    .item span{display:inline-block}
+    label.small{font-size:0.92rem}
+
+    .other-row{display:flex; gap:8px; margin-top:8px; align-items:center}
+    .other-row input{flex:1; padding:8px 10px; border-radius:8px; border:1px solid #e5e7eb}
+    .other-row .add{padding:8px 10px}
+
+    .right{display:flex; flex-direction:column; gap:12px}
+    .summary-list{max-height:420px; overflow:auto; padding:6px}
+    .summary-list ul{margin:0; padding:8px 12px}
+    .summary-list li{padding:6px 0; border-bottom:1px dashed #f0f0f0}
+
+    .print-area{display:none}
+
+    footer{max-width:1100px;margin:18px auto;padding:8px;text-align:center;color:var(--muted);font-size:0.9rem}
+
+    /* small helpers */
+    .chip{background:#f3f4f6;padding:6px 8px;border-radius:999px;font-size:0.85rem}
+    .count{font-weight:600;color:var(--accent)}
+
+    /* floating back-to-top */
+    #backToTop{
+      position:fixed;
+      bottom:20px;
+      right:20px;
+      background:var(--accent);
+      color:white;
+      border:none;
+      padding:12px 14px;
+      border-radius:50%;
+      font-size:20px;
+      cursor:pointer;
+      box-shadow:0 4px 10px rgba(0,0,0,0.2);
+      display:none;
+      z-index:100;
+    }
+
+    /* highlight when searching */
+    .highlight{animation:highlight 2s ease;}
+    @keyframes highlight{0%{background:#fff59d} 70%{background:#fff59d} 100%{background:transparent}}
+  </style>
+</head>
+<body>
+  <header>
+    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 3h18v2H3zM5 7h14v2H5zM7 11h10v2H7zM9 15h6v2H9z" fill="white"/></svg>
+    <h1>Liste de courses — app légère</h1>
+  </header>
+
+  <main class="container">
+    <div class="top">
+      <div class="search card">
+        <input id="search" placeholder="Rechercher un produit (ex: Mozzarella, Sel, Sauce soja)..." autocomplete="off" />
+        <div id="suggest" class="suggestions" style="display:none"></div>
+      </div>
+      <div class="controls">
+        <button class="btn" id="generate">Générer la liste</button>
+        <button class="btn secondary" id="reset">Tout désélectionner</button>
+      </div>
+    </div>
+
+    <section class="grid">
+      <div id="categories"></div>
+
+      <aside class="right">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center"><strong>Récapitulatif</strong><span class="chip">Sélectionnées: <span id="count" class="count">0</span></span></div>
+          <div class="summary-list" id="summary"></div>
+        </div>
+
+        <div class="card">
+          <strong>Actions rapides</strong>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn" id="selectAll">Tout cocher</button>
+            <button class="btn secondary" id="selectNone">Tout décocher</button>
+          </div>
+          <p style="margin-top:10px;color:var(--muted);font-size:0.9rem">Astuce: utilise la recherche en haut pour trouver rapidement un produit puis clique sur la suggestion.</p>
+        </div>
+
+      </aside>
+    </section>
+
+    <div id="printView" class="print-area card" aria-hidden="true"></div>
+  </main>
+
+  <footer>Application simple — imprimable et responsive • Tous champs “Autre” disponibles par catégorie</footer>
+
+  <button id="backToTop" title="Retour en haut">↑</button>
+
+  <script>
+    // ----- données initiales -----
+    const DATA = [
+      {id:'hygiene', name:'Hygiène & Entretien', products:[
+        'PQ','Détergent','Lessive','Savon dur','Savon liquide','Brosse à dent','Dentifrice', 'Mouchoirs'
+      ]},
+      {id:'epicerie', name:'Épicerie & Condiments', products:[
+        'Sel','Poivre','Semoule','Riz','Pâtes','Huile d\'olives','Moutarde','Mayonaise','Passata di tomato','Sauce tomate','Sauce pizza','Sauce soja','Sauce piquante'
+      ]},
+      {id:'laitiers', name:'Produits laitiers & Fromages', products:[
+        'Mozzarella', 'Queso manchego', 'Brie', 'Crème fraiche','Beurre','Oeufs'
+      ]},
+      {id:'legumes', name:'Légumes & Salades', products:[
+        'Roquette','Champignons','Laitue','Poivrons','Aubergines','Oignons', 'Tomates', 'Tomates cerises', 'Coriandre', 'Gingembre'
+      ]},
+      {id:'pains', name:'Pains / Céréales', products:[
+        'Pâtes','Pain','Céréales', 'Farine', 'Farine sans gluten', 'Maizena', 'Sucre', 'Café', 'Thé/Tisane'
+      ]},
+      {id:'viandes', name:'Viandes & Protéines', products:[
+        'Boeuf', 'Poulet', 'Jambon', 'Pepperoni', 'Saucisson', 'Lard/Bacon','Poisson','Crevettes'
+      ]},
+      {id:'snacks', name:'Snacks & Sucreries', products:[
+        'Sucreries','Chips','Crackers', 'Nachos', 'Chifles', 'Chocolat', 'Bonbons', 'Nutella', 'Confiture'
+      ]},
+      {id:'autres', name:'Autres', products:[
+        'Autre'
+      ]}
+    ];
+
+    // ----- éléments DOM -----
+    const categoriesEl = document.getElementById('categories');
+    const search = document.getElementById('search');
+    const suggest = document.getElementById('suggest');
+    const summary = document.getElementById('summary');
+    const countEl = document.getElementById('count');
+    const backToTop = document.getElementById('backToTop');
+
+    // générateur d'ID simple pour inputs
+    let idCounter = 0;
+    function uid(){ return 'p_' + (++idCounter); }
+
+    // ----- création UI -----
+    function createCategory(cat){
+      const wrap = document.createElement('div'); wrap.className='card category'; wrap.dataset.cat = cat.id;
+      const head = document.createElement('div'); head.className='cat-head';
+      const h2 = document.createElement('h2'); h2.textContent = cat.name;
+      const mini = document.createElement('div'); mini.className='chip'; mini.textContent = `${cat.products.length} produits`;
+      head.appendChild(h2); head.appendChild(mini);
+      wrap.appendChild(head);
+
+      const items = document.createElement('div'); items.className='items';
+      cat.products.forEach(p => {
+        const it = createItemElement(p, cat.id);
+        items.appendChild(it);
+      });
+      wrap.appendChild(items);
+
+      const otherRow = document.createElement('div'); otherRow.className='other-row';
+      const input = document.createElement('input'); input.placeholder='Autre... (laisser vide pour annuler)'; input.className='other-input';
+      const addBtn = document.createElement('button'); addBtn.className='btn add'; addBtn.textContent='+';
+      addBtn.addEventListener('click', ()=>{
+        const v = input.value.trim(); if(!v) return; const el = createItemElement(v, cat.id, true); items.appendChild(el); input.value=''; updateSummary(); refreshAllProducts(); saveState();
+      });
+      otherRow.appendChild(input); otherRow.appendChild(addBtn);
+      wrap.appendChild(otherRow);
+
+      categoriesEl.appendChild(wrap);
+    }
+
+    function createItemElement(text, catId, checked=false){
+      const div = document.createElement('label'); div.className='item';
+      const cb = document.createElement('input'); cb.type='checkbox'; cb.dataset.cat = catId; cb.dataset.name = text; cb.checked = checked; cb.id = uid();
+      cb.addEventListener('change', ()=>{ updateSummary(); saveState(); });
+      const span = document.createElement('span'); span.className='small'; span.textContent = text;
+      div.appendChild(cb); div.appendChild(span);
+      return div;
+    }
+
+    // construire l'interface
+    DATA.forEach(c=> createCategory(c));
+
+    // ----- recherche prédictive -----
+    let allProducts = [];
+    function refreshAllProducts(){
+      allProducts = [];
+      document.querySelectorAll('.item').forEach(i=> allProducts.push({name:i.querySelector('span').textContent, el:i}));
+    }
+    refreshAllProducts();
+
+    function showSuggestions(q){
+      const value = q.trim().toLowerCase(); if(!value){ suggest.style.display='none'; return }
+      const matches = allProducts.filter(p=> p.name.toLowerCase().includes(value));
+      suggest.innerHTML='';
+      if(matches.length===0){ suggest.style.display='none'; return }
+      matches.slice(0,12).forEach(m=>{
+        const btn = document.createElement('button'); btn.type='button'; btn.textContent = m.name;
+        btn.addEventListener('click', ()=>{
+          // on utilise l'élément exact trouvé (m.el) pour cocher et scroller
+          const checkbox = m.el.querySelector('input[type=checkbox]');
+          if(checkbox){
+            checkbox.checked = true;
+            checkbox.scrollIntoView({behavior:'smooth', block:'center'});
+            highlightElement(m.el);
+            checkbox.focus();
+            saveState();
+            updateSummary();
+          } else {
+            addToOthers(m.name);
+          }
+          suggest.style.display='none'; search.value='';
+        });
+        suggest.appendChild(btn);
+      });
+      suggest.style.display='block';
+    }
+
+    search.addEventListener('input',(e)=> showSuggestions(e.target.value));
+    search.addEventListener('keydown',(e)=>{ if(e.key==='Enter'){ const first = suggest.querySelector('button'); if(first){ first.click(); e.preventDefault(); } } });
+    document.addEventListener('click', (e)=>{ if(!e.target.closest('.search')) suggest.style.display='none' });
+
+    function addToOthers(name){
+      const catEl = document.querySelector('.card.category[data-cat="autres"] .items');
+      if(!catEl) return;
+      const el = createItemElement(name, 'autres', true);
+      catEl.appendChild(el);
+      refreshAllProducts();
+      const checkbox = el.querySelector('input');
+      if(checkbox){ checkbox.scrollIntoView({behavior:'smooth', block:'center'}); checkbox.focus(); }
+      highlightElement(el);
+      saveState(); updateSummary();
+    }
+
+    // ----- récapitulatif -----
+    function updateSummary(){
+      const checked = Array.from(document.querySelectorAll('.item input[type=checkbox]')).filter(i=>i.checked);
+      const grouped = {};
+      checked.forEach(cb=>{
+        const cat = DATA.find(c=>c.id===cb.dataset.cat)?.name || cb.dataset.cat;
+        if(!grouped[cat]) grouped[cat]=[];
+        grouped[cat].push(cb.dataset.name);
+      });
+      summary.innerHTML='';
+      if(checked.length===0){ summary.innerHTML = '<p style="color:var(--muted)">Aucun produit sélectionné</p>'; countEl.textContent = 0; return }
+      const ul = document.createElement('ul');
+      for(const catName of Object.keys(grouped)){
+        const li = document.createElement('li');
+        li.innerHTML = `<strong>${catName}</strong><br/>` + grouped[catName].map(x=>`- ${x}`).join('<br/>');
+        ul.appendChild(li);
+      }
+      summary.appendChild(ul);
+      countEl.textContent = checked.length;
+    }
+
+    // ----- sauvegarde locale -----
+    function saveState(){
+      // store list of checked items and also custom "autre" entries (present in DOM but not in DATA)
+      const checked = Array.from(document.querySelectorAll('.item input[type=checkbox]')).filter(i=>i.checked).map(i=>({name:i.dataset.name, cat:i.dataset.cat}));
+      localStorage.setItem('coursesSelection', JSON.stringify(checked));
+      // store also list of all "autre" custom items so they persist
+      const custom = Array.from(document.querySelectorAll('.card.category[data-cat="autres"] .item span')).map(s=>s.textContent);
+      localStorage.setItem('coursesCustomAutres', JSON.stringify(custom));
+    }
+
+    function loadState(){
+      // restore custom "autre" items first
+      const custom = JSON.parse(localStorage.getItem('coursesCustomAutres')||'[]');
+      const autresContainer = document.querySelector('.card.category[data-cat="autres"] .items');
+      if(autresContainer && custom.length){
+        // remove the default placeholder 'Autre' if present
+        Array.from(autresContainer.querySelectorAll('.item')).forEach(it=>{ if(it.querySelector('span').textContent.trim()==='Autre') it.remove(); });
+        custom.forEach(name=>{
+          const el = createItemElement(name, 'autres', false);
+          autresContainer.appendChild(el);
+        });
+        refreshAllProducts();
+      }
+
+      const saved = JSON.parse(localStorage.getItem('coursesSelection')||'[]');
+      if(saved.length){
+        // ensure fresh product list
+        refreshAllProducts();
+        document.querySelectorAll('.item input[type=checkbox]').forEach(cb=>{
+          if(saved.find(s=>s.name===cb.dataset.name && s.cat===cb.dataset.cat)) cb.checked = true;
+        });
+        updateSummary();
+      }
+    }
+
+    // ----- highlight helper -----
+    function highlightElement(el){
+      el.classList.add('highlight');
+      setTimeout(()=> el.classList.remove('highlight'), 2000);
+    }
+
+    // ----- actions rapides -----
+    document.getElementById('selectAll').addEventListener('click', ()=>{ document.querySelectorAll('.item input[type=checkbox]').forEach(i=>i.checked=true); updateSummary(); saveState(); });
+    document.getElementById('selectNone').addEventListener('click', ()=>{ document.querySelectorAll('.item input[type=checkbox]').forEach(i=>i.checked=false); updateSummary(); saveState(); });
+    document.getElementById('reset').addEventListener('click', ()=>{ document.querySelectorAll('.item input[type=checkbox]').forEach(i=>i.checked=false); document.querySelectorAll('.other-input').forEach(i=>i.value=''); updateSummary(); saveState(); });
+
+    // ----- génération imprimable -----
+    document.getElementById('generate').addEventListener('click', ()=>{
+      const checked = Array.from(document.querySelectorAll('.item input[type=checkbox]')).filter(i=>i.checked);
+      if(checked.length===0){ alert('Aucun produit sélectionné.'); return }
+      const grouped = {};
+      checked.forEach(cb=>{
+        const cat = DATA.find(c=>c.id===cb.dataset.cat)?.name || cb.dataset.cat;
+        if(!grouped[cat]) grouped[cat]=[];
+        grouped[cat].push(cb.dataset.name);
+      });
+      let html = `<!doctype html><html><head><meta charset="utf-8"><title>Liste imprimable</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:Arial,Helvetica,sans-serif;padding:18px;color:#111}h1{color:#111}h2{margin-bottom:6px}ul{margin-top:0;padding-left:18px} .cat{margin-bottom:14px} .phone{font-size:0.95rem;color:#555}</style></head><body>`;
+      html += `<h1>Liste de courses</h1><p class="phone">Générée le ${new Date().toLocaleString('fr-FR')}</p>`;
+      for(const catName of Object.keys(grouped)){
+        html += `<div class="cat"><h2>${catName}</h2><ul>`;
+        grouped[catName].forEach(p => html += `<li>${p}</li>`);
+        html += `</ul></div>`;
+      }
+      html += `<p style="margin-top:24px;font-size:0.9rem;color:#666">Ouvrir en plein écran pour impression (Ctrl/Cmd+P) ou partager.</p>`;
+      html += `</body></html>`;
+
+      const w = window.open('', '_blank');
+      w.document.write(html); w.document.close();
+      w.focus();
+    });
+
+    // ----- back to top -----
+    window.addEventListener('scroll', ()=>{
+      if(window.scrollY > 200) backToTop.style.display = 'block'; else backToTop.style.display = 'none';
+    });
+    backToTop.addEventListener('click', ()=> window.scrollTo({top:0, behavior:'smooth'}));
+
+    // ----- initialisation -----
+    refreshAllProducts();
+    loadState();
+    updateSummary();
+
+  </script>
+</body>
+</html>
