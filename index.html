@@ -4,6 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Liste de courses — App simple</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
   <style>
     :root{
       --bg:#f7f8fb; --card:#ffffff; --accent:#006EED; --muted:#6b7280; --radius:10px;
@@ -88,7 +90,7 @@
         <div id="suggest" class="suggestions" style="display:none"></div>
       </div>
       <div class="controls">
-        <button class="btn" id="generate">Générer la liste</button>
+        <button class="btn" id="generate">Générer le PDF</button>
         <button class="btn secondary" id="reset">Tout désélectionner</button>
       </div>
     </div>
@@ -147,8 +149,7 @@
       ]},
       {id:'snacks', name:'Snacks & Sucreries', products:[
         'Sucreries','Chips','Crackers', 'Nachos', 'Chifles', 'Chocolat', 'Bonbons', 'Nutella', 'Confiture'
-      ]},
-      {id:'autres', name:'Autres', products:['Autre']}
+      ]}
     ];
 
     // ----- éléments DOM -----
@@ -285,30 +286,29 @@
       localStorage.setItem('coursesCustomAutres', JSON.stringify(custom));
     }
 
-    function loadState(){
-      // restore custom "autre" items first
-      const custom = JSON.parse(localStorage.getItem('coursesCustomAutres')||'[]');
-      const autresContainer = document.querySelector('.card.category[data-cat="autres"] .items');
-      if(autresContainer && custom.length){
-        // remove the default placeholder 'Autre' if present
-        Array.from(autresContainer.querySelectorAll('.item')).forEach(it=>{ if(it.querySelector('span').textContent.trim()==='Autre') it.remove(); });
-        custom.forEach(name=>{
-          const el = createItemElement(name, 'autres', false);
-          autresContainer.appendChild(el);
-        });
-        refreshAllProducts();
-      }
+   function loadState(){
+  const custom = JSON.parse(localStorage.getItem('coursesCustomAutres')||'[]');
+  const autresContainer = document.querySelector('.card.category[data-cat="autres"] .items');
+  if(autresContainer){
+    // on supprime TOUT sauf les champs "other-row"
+    autresContainer.innerHTML = "";
+    // puis on recrée les éléments sauvegardés
+    custom.forEach(name=>{
+      const el = createItemElement(name, 'autres', false);
+      autresContainer.appendChild(el);
+    });
+    refreshAllProducts();
+  }
 
-      const saved = JSON.parse(localStorage.getItem('coursesSelection')||'[]');
-      if(saved.length){
-        // ensure fresh product list
-        refreshAllProducts();
-        document.querySelectorAll('.item input[type=checkbox]').forEach(cb=>{
-          if(saved.find(s=>s.name===cb.dataset.name && s.cat===cb.dataset.cat)) cb.checked = true;
-        });
-        updateSummary();
-      }
-    }
+  const saved = JSON.parse(localStorage.getItem('coursesSelection')||'[]');
+  if(saved.length){
+    refreshAllProducts();
+    document.querySelectorAll('.item input[type=checkbox]').forEach(cb=>{
+      if(saved.find(s=>s.name===cb.dataset.name && s.cat===cb.dataset.cat)) cb.checked = true;
+    });
+    updateSummary();
+  }
+}
 
     // ----- highlight helper -----
     function highlightElement(el){
@@ -323,28 +323,43 @@
 
     // ----- génération imprimable -----
     document.getElementById('generate').addEventListener('click', ()=>{
-      const checked = Array.from(document.querySelectorAll('.item input[type=checkbox]')).filter(i=>i.checked);
-      if(checked.length===0){ alert('Aucun produit sélectionné.'); return }
-      const grouped = {};
-      checked.forEach(cb=>{
-        const cat = DATA.find(c=>c.id===cb.dataset.cat)?.name || cb.dataset.cat;
-        if(!grouped[cat]) grouped[cat]=[];
-        grouped[cat].push(cb.dataset.name);
-      });
-      let html = `<!doctype html><html><head><meta charset="utf-8"><title>Liste imprimable</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:Arial,Helvetica,sans-serif;padding:18px;color:#111}h1{color:#111}h2{margin-bottom:6px}ul{margin-top:0;padding-left:18px} .cat{margin-bottom:14px} .phone{font-size:0.95rem;color:#555}</style></head><body>`;
-      html += `<h1>Liste de courses</h1><p class="phone">Générée le ${new Date().toLocaleString('fr-FR')}</p>`;
-      for(const catName of Object.keys(grouped)){
-        html += `<div class="cat"><h2>${catName}</h2><ul>`;
-        grouped[catName].forEach(p => html += `<li>${p}</li>`);
-        html += `</ul></div>`;
-      }
-      html += `<p style="margin-top:24px;font-size:0.9rem;color:#666">Ouvrir en plein écran pour impression (Ctrl/Cmd+P) ou partager.</p>`;
-      html += `</body></html>`;
+  const checked = Array.from(document.querySelectorAll('.item input[type=checkbox]')).filter(i=>i.checked);
+  if(checked.length === 0){ 
+    alert("Aucun produit sélectionné."); 
+    return; 
+  }
 
-      const w = window.open('', '_blank');
-      w.document.write(html); w.document.close();
-      w.focus();
+  const grouped = {};
+  checked.forEach(cb=>{
+    const cat = DATA.find(c=>c.id===cb.dataset.cat)?.name || cb.dataset.cat;
+    if(!grouped[cat]) grouped[cat]=[];
+    grouped[cat].push(cb.dataset.name);
+  });
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = 20;
+  doc.setFontSize(16);
+  doc.text("Ma liste de courses", 14, y);
+  y += 10;
+  doc.setFontSize(12);
+
+  for(const cat of Object.keys(grouped)){
+    doc.setFont(undefined,'bold');
+    doc.text(cat, 14, y);
+    y += 6;
+    doc.setFont(undefined,'normal');
+    grouped[cat].forEach(item=>{
+      doc.text("- " + item, 20, y);
+      y += 6;
+      if(y > 280){ doc.addPage(); y = 20; }
     });
+    y += 4;
+  }
+
+  doc.save("liste-de-courses.pdf");
+});
+
 
     // ----- back to top -----
     window.addEventListener('scroll', ()=>{
