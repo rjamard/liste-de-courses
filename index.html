@@ -277,49 +277,67 @@
     }
 
     // ----- sauvegarde locale -----
-    function saveState(){
-      // store list of checked items and also custom "autre" entries (present in DOM but not in DATA)
-      const checked = Array.from(document.querySelectorAll('.item input[type=checkbox]')).filter(i=>i.checked).map(i=>({name:i.dataset.name, cat:i.dataset.cat}));
-      localStorage.setItem('coursesSelection', JSON.stringify(checked));
-      // store also list of all "autre" custom items so they persist
-      const custom = Array.from(document.querySelectorAll('.card.category[data-cat="autres"] .item span')).map(s=>s.textContent);
-      localStorage.setItem('coursesCustomAutres', JSON.stringify(custom));
-    }
+ function saveState(){
+  try{
+    // Sauvegarder tous les éléments cochés
+    const checked = Array.from(document.querySelectorAll('.item input[type=checkbox]'))
+      .filter(i => i.checked)
+      .map(i => ({ name: i.dataset.name, cat: i.dataset.cat }));
 
-   function loadState(){
-  const custom = JSON.parse(localStorage.getItem('coursesCustomAutres')||'[]');
-  const autresContainer = document.querySelector('.card.category[data-cat="autres"] .items');
-  if(autresContainer){
-    // on supprime TOUT sauf les champs "other-row"
-    autresContainer.innerHTML = "";
-    // puis on recrée les éléments sauvegardés
-    custom.forEach(name=>{
-      const el = createItemElement(name, 'autres', false);
-      autresContainer.appendChild(el);
+    // Sauvegarder les éléments ajoutés manuellement (ceux non présents dans DATA)
+    const customs = {};
+    document.querySelectorAll('.category').forEach(catEl => {
+      const catId = catEl.dataset.cat;
+      const dataCat = DATA.find(c => c.id === catId);
+      const items = Array.from(catEl.querySelectorAll('.item span')).map(s => s.textContent.trim());
+      // On garde seulement les items non déjà dans DATA
+      const customItems = items.filter(it => !dataCat.products.includes(it));
+      if (customItems.length) customs[catId] = customItems;
     });
-    refreshAllProducts();
-  }
 
-  const saved = JSON.parse(localStorage.getItem('coursesSelection')||'[]');
-  if(saved.length){
-    refreshAllProducts();
-    document.querySelectorAll('.item input[type=checkbox]').forEach(cb=>{
-      if(saved.find(s=>s.name===cb.dataset.name && s.cat===cb.dataset.cat)) cb.checked = true;
-    });
-    updateSummary();
+    localStorage.setItem('coursesSelection', JSON.stringify(checked));
+    localStorage.setItem('coursesCustomItems', JSON.stringify(customs));
+
+    console.log('[saveState] saved', checked, customs);
+  } catch(e){
+    console.error('[saveState] error', e);
   }
 }
 
-    // ----- highlight helper -----
-    function highlightElement(el){
-      el.classList.add('highlight');
-      setTimeout(()=> el.classList.remove('highlight'), 2000);
+
+function loadState(){
+  try{
+    const saved = JSON.parse(localStorage.getItem('coursesSelection') || '[]');
+    const customs = JSON.parse(localStorage.getItem('coursesCustomItems') || '{}');
+
+    // Restaurer les éléments ajoutés manuellement
+    for(const catId in customs){
+      const catEl = document.querySelector(`.category[data-cat="${catId}"] .items`);
+      if(catEl){
+        customs[catId].forEach(name => {
+          const el = createItemElement(name, catId, false);
+          catEl.appendChild(el);
+        });
+      }
     }
 
-    // ----- actions rapides -----
-    document.getElementById('selectAll').addEventListener('click', ()=>{ document.querySelectorAll('.item input[type=checkbox]').forEach(i=>i.checked=true); updateSummary(); saveState(); });
-    document.getElementById('selectNone').addEventListener('click', ()=>{ document.querySelectorAll('.item input[type=checkbox]').forEach(i=>i.checked=false); updateSummary(); saveState(); });
-    document.getElementById('reset').addEventListener('click', ()=>{ document.querySelectorAll('.item input[type=checkbox]').forEach(i=>i.checked=false); document.querySelectorAll('.other-input').forEach(i=>i.value=''); updateSummary(); saveState(); });
+    refreshAllProducts();
+
+    // Restaurer les cases cochées
+    if(saved.length){
+      document.querySelectorAll('.item input[type=checkbox]').forEach(cb => {
+        const match = saved.find(s => s.name === cb.dataset.name && s.cat === cb.dataset.cat);
+        cb.checked = !!match;
+      });
+      updateSummary();
+    }
+
+    console.log('[loadState] restored', saved, customs);
+  } catch(e){
+    console.error('[loadState] error', e);
+  }
+}
+
 
     // ----- génération imprimable -----
     document.getElementById('generate').addEventListener('click', ()=>{
@@ -371,6 +389,53 @@
     refreshAllProducts();
     loadState();
     updateSummary();
+
+
+    // --- Boutons d’action rapide ---
+
+// Fonction utilitaire pour supprimer les produits personnalisés
+function clearCustomItems(){
+  const customs = JSON.parse(localStorage.getItem('coursesCustomItems') || '{}');
+  for(const catId in customs){
+    const catEl = document.querySelector(`.category[data-cat="${catId}"] .items`);
+    if(catEl){
+      customs[catId].forEach(name=>{
+        const el = Array.from(catEl.querySelectorAll('.item span'))
+          .find(s => s.textContent.trim() === name);
+        if(el && el.parentElement) el.parentElement.remove();
+      });
+    }
+  }
+  localStorage.removeItem('coursesCustomItems');
+  refreshAllProducts();
+}
+
+
+// --- Tout cocher ---
+document.getElementById('selectAll').addEventListener('click', () => {
+  document.querySelectorAll('.item input[type=checkbox]').forEach(cb => cb.checked = true);
+  updateSummary();
+  saveState();
+});
+
+
+// --- Tout décocher ---
+document.getElementById('selectNone').addEventListener('click', () => {
+  document.querySelectorAll('.item input[type=checkbox]').forEach(cb => cb.checked = false);
+  clearCustomItems();   // ✅ supprime les produits ajoutés manuellement
+  updateSummary();
+  saveState();
+});
+
+
+// --- Tout désélectionner (même logique que décocher) ---
+document.getElementById('reset').addEventListener('click', () => {
+  document.querySelectorAll('.item input[type=checkbox]').forEach(cb => cb.checked = false);
+  clearCustomItems();   // ✅ supprime aussi les produits manuels
+  updateSummary();
+  saveState();
+});
+
 
   </script>
 </body>
