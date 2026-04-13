@@ -75,6 +75,17 @@
     /* highlight when searching */
     .highlight{animation:highlight 2s ease;}
     @keyframes highlight{0%{background:#fff59d} 70%{background:#fff59d} 100%{background:transparent}}
+
+    @media (max-width: 600px){
+  .top{
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .controls{
+    justify-content: space-between;
+  }
+}
   </style>
 </head>
 <body>
