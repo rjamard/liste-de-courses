@@ -21,7 +21,7 @@
     .search input{width:100%; padding:12px 14px; border-radius:10px; border:1px solid #e5e7eb}
     .suggestions{position:absolute; left:0; right:0; background:var(--card); border:1px solid #e5e7eb; margin-top:6px; border-radius:8px; max-height:220px; overflow:auto; z-index:20}
     .suggestions button{display:block; width:100%; text-align:left; padding:10px 12px; border:none; background:transparent}
-    .controls{display:flex; gap:8px}
+    .controls{display:flex; gap:8px; flex-wrap:wrap}
     .btn{background:var(--accent); color:white; padding:10px 12px; border-radius:10px; border:none; cursor:pointer}
     .btn.secondary{background:transparent; color:var(--accent); border:1px solid var(--accent)}
 
@@ -86,6 +86,13 @@
     justify-content: space-between;
   }
 }
+    #storeMode[hidden], #storePanel[hidden], #preparationView[hidden], .top[hidden]{display:none!important}
+    #storePanel .item.in-cart{background:#f3f4f6;color:var(--muted)}
+    #storePanel .item.in-cart span{text-decoration:line-through}
+    #storePanel .item{cursor:pointer;min-height:44px}
+    .store-progress{height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:10px}
+    .store-progress > div{height:100%;background:var(--accent);transition:width .2s}
+    #storePanel .category{margin-top:12px}
   </style>
 </head>
 <body>
@@ -101,12 +108,13 @@
         <div id="suggest" class="suggestions" style="display:none"></div>
       </div>
       <div class="controls">
+        <button class="btn" id="openStore">Accès à la liste</button>
         <button class="btn" id="generate">Générer le PDF</button>
         <button class="btn secondary" id="reset">Tout désélectionner</button>
       </div>
     </div>
 
-    <section class="grid">
+    <section class="grid" id="preparationView">
       <div id="categories"></div>
 
       <aside class="right">
@@ -127,6 +135,17 @@
       </aside>
     </section>
 
+    <section id="storePanel" hidden>
+      <div class="card">
+        <div class="cat-head"><strong>Ma liste de courses</strong><button class="btn secondary" id="closeStore">Retour aux produits</button></div>
+        <p id="storeCount" aria-live="polite" style="margin:12px 0 0"></p>
+        <div class="store-progress" role="progressbar" aria-label="Produits dans le caddie" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="storeProgress" style="width:0%"></div></div>
+        <p style="color:var(--muted);font-size:0.9rem;margin-bottom:0">Appuie sur un produit dès qu’il est dans ton caddie pour le barrer. Appuie à nouveau pour annuler.</p>
+      </div>
+      <div id="storeItems"></div>
+      <button class="btn secondary" id="resetList" style="margin-top:8px">Tout désélectionner</button>
+    </section>
+
     <div id="printView" class="print-area card" aria-hidden="true"></div>
   </main>
 
@@ -137,31 +156,197 @@
   <script>
     // ----- données initiales -----
     const DATA = [
-      {id:'hygiene', name:'Hygiène & Entretien', products:[
-        'PQ','Détergent','Lessive','Savon dur','Savon liquide','Brosse à dent','Dentifrice', 'Mouchoirs'
-      ]},
-      {id:'epicerie', name:'Épicerie & Condiments', products:[
-        'Sel','Poivre','Semoule','Riz','Pâtes','Huile d\'olives','Moutarde','Mayonaise','Passata di tomato','Sauce tomate','Sauce pizza','Sauce soja','Sauce piquante'
-      ]},
-      {id:'laitiers', name:'Produits laitiers & Fromages', products:[
-        'Mozzarella', 'Queso manchego', 'Brie', 'Crème fraiche','Beurre','Oeufs', 'Lait', 'Yaourt', 'Lait d\'amandes', 'Lait de coco'
-      ]},
-      {id:'legumes', name:'Légumes & Salades', products:[
-        'Roquette','Champignons','Laitue','Poivrons','Aubergines','Oignons', 'Tomates', 'Tomates cerises', 'Avocat', 'Coriandre', 'Gingembre', 'Céleri (apio)' 
-      ]},
-      {id:'fruits', name:'Fruits', products:[
-        'Citron', 'Oranges', 'Pommes', 'Bananes', 'Kiwis', 'Arándanos', 'Ananas'
-      ]},
-      {id:'pains', name:'Pains / Céréales', products:[
-        'Pâtes','Pain','Céréales', 'Farine', 'Farine sans gluten', 'Maizena', 'Sucre', 'Café', 'Thé/Tisane'
-      ]},
-      {id:'viandes', name:'Viandes & Protéines', products:[
-        'Boeuf', 'Viande hachée', 'Poulet', 'Jambon', 'Pepperoni', 'Saucisson', 'Lard/Bacon','Poisson','Crevettes'
-      ]},
-      {id:'snacks', name:'Snacks & Sucreries', products:[
-        'Sucreries','Chips','Crackers', 'Nachos', 'Chifles', 'Chocolat', 'Bonbons', 'Nutella', 'Confiture'
-      ]}
-    ];
+  {
+    "id": "hygiene",
+    "name": "Hygiène et entretien",
+    "products": [
+      "PQ",
+      "Détergent",
+      "Lessive",
+      "Savon dur",
+      "Savon liquide",
+      "Brosse à dent",
+      "Dentifrice",
+      "Mouchoirs",
+      "Déodorant",
+      "Produit vaisselle",
+      "Shampoing",
+      "Eau de javel",
+      "Eponges"
+    ]
+  },
+  {
+    "id": "charcuterie",
+    "name": "Charcuterie",
+    "products": [
+      "Saucisses",
+      "Jambon",
+      "Saucisson",
+      "Pepperoni",
+      "Lard",
+      "Chorizo"
+    ]
+  },
+  {
+    "id": "frais",
+    "name": "Aliments frais",
+    "products": [
+      "Soja",
+      "Tortillas de maïs",
+      "Pâte feuilletée",
+      "Pâte à empanadas",
+      "Fromage végane"
+    ]
+  },
+  {
+    "id": "epicerie",
+    "name": "Épicerie et condiments",
+    "products": [
+      "Sel",
+      "Poivre",
+      "Semoule",
+      "Riz",
+      "Pâtes",
+      "Huile d'olives",
+      "Moutarde",
+      "Mayonaise",
+      "Passata di tomato",
+      "Sauce tomate",
+      "Sauce pizza",
+      "Sauce soja",
+      "Sauce piquante",
+      "Pâtes de Riz",
+      "Pâtes sans gluten",
+      "Farine sans gluten",
+      "Lait de coco",
+      "Chocolat de pâtisserie"
+    ]
+  },
+  {
+    "id": "petitdej",
+    "name": "Épicerie sucrée et petit-déj",
+    "products": [
+      "Confiture",
+      "Nutella - pâte à tartiner",
+      "Miel",
+      "Sirop",
+      "Céréales",
+      "Granola",
+      "Barres de céréales",
+      "Lait de coco",
+      "Lait d'avoine",
+      "Lait de soja",
+      "Lait sans lactose",
+      "Café moulu",
+      "Thé",
+      "Tisane"
+    ]
+  },
+  {
+    "id": "snacks",
+    "name": "Snacks et sucreries",
+    "products": [
+      "Sucreries",
+      "Chips",
+      "Crackers",
+      "Nachos",
+      "Chifles",
+      "Chocolat",
+      "Bonbons"
+    ]
+  },
+  {
+    "id": "viandes",
+    "name": "Viandes",
+    "products": [
+      "Bœuf",
+      "Viande hâchée",
+      "Poulet",
+      "Dinde"
+    ]
+  },
+  {
+    "id": "legumes",
+    "name": "Légumes",
+    "products": [
+      "Roquette",
+      "Champignons",
+      "Laitue",
+      "Poivrons",
+      "Aubergines",
+      "Brocolis",
+      "Carottes",
+      "Pommes de terre",
+      "Oignons",
+      "Tomates",
+      "Tomates cerises",
+      "Avocat",
+      "Coriandre",
+      "Gingembre",
+      "Céleri (apio)"
+    ]
+  },
+  {
+    "id": "fruits",
+    "name": "Fruits",
+    "products": [
+      "Citron",
+      "Oranges",
+      "Pommes",
+      "Bananes",
+      "Kiwis",
+      "Arándanos",
+      "Fraises",
+      "Framboises",
+      "Mûres",
+      "Physallis (uvillas)",
+      "Ananas",
+      "Poires",
+      "Mangues"
+    ]
+  },
+  {
+    "id": "laitiers",
+    "name": "Produits laitiers",
+    "products": [
+      "Mozzarella",
+      "Queso manchego",
+      "Brie",
+      "Crème fraiche",
+      "Beurre",
+      "Oeufs",
+      "Lait",
+      "Yaourt",
+      "Yaourt à boire"
+    ]
+  },
+  {
+    "id": "surgeles",
+    "name": "Produits surgelés",
+    "products": [
+      "Corvina",
+      "Corvina apanada",
+      "Crevettes",
+      "Nuggets"
+    ]
+  },
+  {
+    "id": "pains",
+    "name": "Boulangerie",
+    "products": [
+      "Pain",
+      "Croissants",
+      "Pain de Mie",
+      "Châpelure",
+      "Galettes"
+    ]
+  },
+  {
+    "id": "divers",
+    "name": "Divers",
+    "products": []
+  }
+];
 
     // ----- éléments DOM -----
     const categoriesEl = document.getElementById('categories');
@@ -219,7 +404,7 @@
     let allProducts = [];
     function refreshAllProducts(){
       allProducts = [];
-      document.querySelectorAll('.item').forEach(i=> allProducts.push({name:i.querySelector('span').textContent, el:i}));
+      document.querySelectorAll('#preparationView .item').forEach(i=> allProducts.push({name:i.querySelector('span').textContent, el:i}));
     }
     refreshAllProducts();
 
@@ -268,7 +453,7 @@
 
     // ----- récapitulatif -----
     function updateSummary(){
-      const checked = Array.from(document.querySelectorAll('.item input[type=checkbox]')).filter(i=>i.checked);
+      const checked = Array.from(document.querySelectorAll('#preparationView .item input[type=checkbox]')).filter(i=>i.checked);
       const grouped = {};
       checked.forEach(cb=>{
         const cat = DATA.find(c=>c.id===cb.dataset.cat)?.name || cb.dataset.cat;
@@ -291,13 +476,13 @@
  function saveState(){
   try{
     // Sauvegarder tous les éléments cochés
-    const checked = Array.from(document.querySelectorAll('.item input[type=checkbox]'))
+    const checked = Array.from(document.querySelectorAll('#preparationView .item input[type=checkbox]'))
       .filter(i => i.checked)
       .map(i => ({ name: i.dataset.name, cat: i.dataset.cat }));
 
     // Sauvegarder les éléments ajoutés manuellement (ceux non présents dans DATA)
     const customs = {};
-    document.querySelectorAll('.category').forEach(catEl => {
+    document.querySelectorAll('#preparationView .category').forEach(catEl => {
       const catId = catEl.dataset.cat;
       const dataCat = DATA.find(c => c.id === catId);
       const items = Array.from(catEl.querySelectorAll('.item span')).map(s => s.textContent.trim());
@@ -323,9 +508,10 @@ function loadState(){
 
     // Restaurer les éléments ajoutés manuellement
     for(const catId in customs){
-      const catEl = document.querySelector(`.category[data-cat="${catId}"] .items`);
+      const catEl = preparationView.querySelector(`.category[data-cat="${catId}"] .items`);
       if(catEl){
         customs[catId].forEach(name => {
+          if (DATA.find(c => c.id === catId)?.products.includes(name)) return;
           const el = createItemElement(name, catId, false);
           catEl.appendChild(el);
         });
@@ -336,7 +522,7 @@ function loadState(){
 
     // Restaurer les cases cochées
     if(saved.length){
-      document.querySelectorAll('.item input[type=checkbox]').forEach(cb => {
+      document.querySelectorAll('#preparationView .item input[type=checkbox]').forEach(cb => {
         const match = saved.find(s => s.name === cb.dataset.name && s.cat === cb.dataset.cat);
         cb.checked = !!match;
       });
@@ -352,7 +538,7 @@ function loadState(){
 
     // ----- génération imprimable -----
     document.getElementById('generate').addEventListener('click', ()=>{
-  const checked = Array.from(document.querySelectorAll('.item input[type=checkbox]')).filter(i=>i.checked);
+  const checked = Array.from(document.querySelectorAll('#preparationView .item input[type=checkbox]')).filter(i=>i.checked);
   if(checked.length === 0){ 
     alert("Aucun produit sélectionné."); 
     return; 
@@ -396,57 +582,117 @@ function loadState(){
     });
     backToTop.addEventListener('click', ()=> window.scrollTo({top:0, behavior:'smooth'}));
 
+    // ----- Mode en magasin -----
+    const cartKey = 'coursesInCartV1';
+    let inCart = new Set();
+    try { inCart = new Set(JSON.parse(localStorage.getItem(cartKey) || '[]')); } catch(e) {}
+    const storePanel = document.getElementById('storePanel');
+    const preparationView = document.getElementById('preparationView');
+    const topControls = document.querySelector('.top');
+    const selectedProducts = () => Array.from(preparationView.querySelectorAll('.item input[type=checkbox]:checked'));
+    const productKey = cb => JSON.stringify([cb.dataset.cat, cb.dataset.name, Array.from(preparationView.querySelectorAll('.item input[type=checkbox]')).filter(x=>x.dataset.cat===cb.dataset.cat && x.dataset.name===cb.dataset.name).indexOf(cb)]);
+    function saveCart(){try{localStorage.setItem(cartKey,JSON.stringify([...inCart]));}catch(e){}}
+    function syncCart(){
+      const keys = new Set(selectedProducts().map(productKey));
+      inCart = new Set([...inCart].filter(k=>keys.has(k)));
+      saveCart();
+    }
+    function updateCartProgress(){
+      const selected = selectedProducts();
+      const done = selected.filter(cb=>inCart.has(productKey(cb))).length;
+      const total = selected.length;
+      document.getElementById('storeCount').textContent = total && done===total ? `Courses terminées ! ${done}/${total} produits dans le caddie` : `${done}/${total} produits dans le caddie · ${total-done} restant(s)`;
+      const percent = total ? Math.round(done*100/total) : 0;
+      document.getElementById('storeProgress').style.width=percent+'%';
+      storePanel.querySelector('[role=progressbar]').setAttribute('aria-valuenow',percent);
+    }
+    function renderStore(){
+      syncCart();
+      const host = document.getElementById('storeItems');
+      host.replaceChildren();
+      const selected = selectedProducts();
+      if(!selected.length){const p=document.createElement('p');p.textContent='Aucun produit sélectionné. Reviens à la liste pour préparer tes courses.';host.appendChild(p);}
+      DATA.forEach(cat=>{
+        const products=selected.filter(cb=>cb.dataset.cat===cat.id);
+        if(!products.length)return;
+        const card=document.createElement('div');card.className='card category';
+        const head=document.createElement('div');head.className='cat-head';
+        const title=document.createElement('h2');title.textContent=cat.name;head.appendChild(title);card.appendChild(head);
+        const items=document.createElement('div');items.className='items';
+        products.forEach(source=>{
+          const key=productKey(source);
+          const row=document.createElement('label');row.className='item';
+          const cb=document.createElement('input');cb.type='checkbox';cb.checked=inCart.has(key);
+          const span=document.createElement('span');span.textContent=source.dataset.name;
+          row.classList.toggle('in-cart',cb.checked);
+          cb.addEventListener('change',()=>{
+            if(cb.checked)inCart.add(key);else inCart.delete(key);
+            row.classList.toggle('in-cart',cb.checked);saveCart();updateCartProgress();
+          });
+          row.append(cb,span);items.appendChild(row);
+        });
+        card.appendChild(items);host.appendChild(card);
+      });
+      updateCartProgress();
+    }
+    function setStoreMode(active){
+      if(active)renderStore();
+      storePanel.hidden=!active; preparationView.hidden=active; topControls.hidden=active;
+      try{localStorage.setItem('coursesStoreModeV1',active?'1':'0');}catch(e){}
+      window.scrollTo(0,0);
+    }
+    document.getElementById('openStore').addEventListener('click',()=>setStoreMode(true));
+    document.getElementById('closeStore').addEventListener('click',()=>setStoreMode(false));
+    document.getElementById('resetList').addEventListener('click',resetEverything);
+    // Synchroniser les achats après toute modification de la liste de préparation.
+    const originalSaveState = saveState;
+    saveState = function(){ originalSaveState();syncCart();renderStore(); };
+
     // ----- initialisation -----
     refreshAllProducts();
     loadState();
     updateSummary();
+    syncCart();
+    try { if(localStorage.getItem('coursesStoreModeV1')==='1')setStoreMode(true); } catch(e) {}
 
 
     // --- Boutons d’action rapide ---
 
 // Fonction utilitaire pour supprimer les produits personnalisés
 function clearCustomItems(){
-  const customs = JSON.parse(localStorage.getItem('coursesCustomItems') || '{}');
-  for(const catId in customs){
-    const catEl = document.querySelector(`.category[data-cat="${catId}"] .items`);
-    if(catEl){
-      customs[catId].forEach(name=>{
-        const el = Array.from(catEl.querySelectorAll('.item span'))
-          .find(s => s.textContent.trim() === name);
-        if(el && el.parentElement) el.parentElement.remove();
-      });
-    }
-  }
-  localStorage.removeItem('coursesCustomItems');
+  preparationView.querySelectorAll('.category').forEach(catEl=>{
+    const dataCat=DATA.find(c=>c.id===catEl.dataset.cat);
+    const seen=new Set();
+    catEl.querySelectorAll('.item').forEach(row=>{
+      const name=row.querySelector('input').dataset.name;
+      if(!dataCat.products.includes(name)||seen.has(name)) row.remove();
+      else seen.add(name);
+    });
+  });
+  try{localStorage.removeItem('coursesCustomItems');}catch(e){}
   refreshAllProducts();
 }
 
-
 // --- Tout cocher ---
 document.getElementById('selectAll').addEventListener('click', () => {
-  document.querySelectorAll('.item input[type=checkbox]').forEach(cb => cb.checked = true);
+  document.querySelectorAll('#preparationView .item input[type=checkbox]').forEach(cb => cb.checked = true);
   updateSummary();
   saveState();
 });
 
 
-// --- Tout décocher ---
-document.getElementById('selectNone').addEventListener('click', () => {
-  document.querySelectorAll('.item input[type=checkbox]').forEach(cb => cb.checked = false);
-  clearCustomItems();   // ✅ supprime les produits ajoutés manuellement
+// --- Remise à zéro commune aux deux onglets ---
+function resetEverything(){
+  preparationView.querySelectorAll('.item input[type=checkbox]').forEach(cb => cb.checked = false);
+  clearCustomItems();
+  preparationView.querySelectorAll('.other-input').forEach(input=>input.value='');
+  search.value=''; suggest.style.display='none';
+  inCart.clear();
   updateSummary();
   saveState();
-});
-
-
-// --- Tout désélectionner (même logique que décocher) ---
-document.getElementById('reset').addEventListener('click', () => {
-  document.querySelectorAll('.item input[type=checkbox]').forEach(cb => cb.checked = false);
-  clearCustomItems();   // ✅ supprime aussi les produits manuels
-  updateSummary();
-  saveState();
-});
-
+}
+document.getElementById('selectNone').addEventListener('click', resetEverything);
+document.getElementById('reset').addEventListener('click', resetEverything);
 
   </script>
 </body>
